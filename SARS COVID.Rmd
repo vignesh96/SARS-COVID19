@@ -3,10 +3,9 @@ title: "SARS Covid-19 Prediction and Analysis"
 output: "Predictive Model and comparitive analysis"
 ---
 
-
 ```{r}
 # Load the data and View it.
-data<-read.csv("//Users//rahuldhanapal//Documents//R//Project//Covid Dataset.csv",stringsAsFactors = TRUE)
+data<-read.csv("Covid Dataset.csv",stringsAsFactors = TRUE)
 # Summary of the data.
 summary(data)
 ```
@@ -23,35 +22,39 @@ colnames(data) = col_names
 ```{r}
 # visualising how each factor affects the target property
 library(ggplot2)
-yesses = sapply(data,FUN = function(x){(length(x[x=="Yes"])/4383)*100})
-yesses = yesses[-21]
+yesses = sapply(data,FUN = function(x){(length(x[x=="Yes"])/length(x))*100})
+print(yesses)
+yesses = yesses[-which(names(yesses) %in% c("covid19"))]
+print(yesses)
 sum_yes = round((yesses / sum(yesses)) * 100, 2)
 
-df_sum_yes = data.frame(sum_yes)
-df_sum_yes["groups"] = row.names(df_sum_yes)
+sum_yes_df = data.frame(sum_yes)
+sum_yes_df["groups"] = row.names(sum_yes_df)
 
-ggplot(data=df_sum_yes, aes(x=reorder(df_sum_yes$groups, df_sum_yes$sum_yes), y=df_sum_yes$sum_yes)) +
+ggplot(data=sum_yes_df, aes(x=reorder(groups, sum_yes), y=sum_yes)) +
   geom_bar(stat="identity", fill="steelblue") +
-  geom_text(aes(label=df_sum_yes$sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
+  geom_text(aes(label=sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
 ```
+
 ```{r}
 #Feature Engineering 
 
 #It is seeen from bove that the observations sanitization and  masks do not contribute in any manner and it is best to remove it as a best practice.
-
-data = data[,-c(19,20)]
+print(data)
+data = data[,-which(names(yesses) %in% c("sanitization","masks"))]
+print(data)
 # After removal of the unwanted columns 
 
-yesses = sapply(data,FUN = function(x){(length(x[x=="Yes"])/4383)*100})
-yesses = yesses[-21]
+yesses = sapply(data,FUN = function(x){(length(x[x=="Yes"])/length(x))*100})
+yesses = yesses[-which(names(yesses) %in% c("covid19"))]
 sum_yes = round((yesses / sum(yesses)) * 100, 2)
 
-df_sum_yes = data.frame(sum_yes)
-df_sum_yes["groups"] = row.names(df_sum_yes)
+sum_yes_df = data.frame(sum_yes)
+sum_yes_df["groups"] = row.names(sum_yes_df)
 
-ggplot(data=df_sum_yes, aes(x=reorder(df_sum_yes$groups, df_sum_yes$sum_yes), y=df_sum_yes$sum_yes)) +
+ggplot(data=sum_yes_df, aes(x=reorder(groups, sum_yes), y=sum_yes)) +
   geom_bar(stat="identity", fill="steelblue") +
-  geom_text(aes(label=df_sum_yes$sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
+  geom_text(aes(label=sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
 
 ```
 
@@ -59,9 +62,9 @@ ggplot(data=df_sum_yes, aes(x=reorder(df_sum_yes$groups, df_sum_yes$sum_yes), y=
 # SMOTE for class IMBALANCE
 library(performanceEstimation)
 # data before oversampling
-plot(data$covid19)
+with(data, plot(covid19))
 # Values before SMOTE
-summary(data$covid19)
+with(data, summary(covid19))
 
 set.seed(123)
 data_synthesised = smote(covid19~.,data,perc.over = 1,perc.under =2)
@@ -69,7 +72,6 @@ plot(data_synthesised$covid19) # the minor class is oversampled using smote and 
 
 
 ```
-
 
 ```{r}
 # train and test split data.
@@ -80,11 +82,10 @@ sam = sample(dim(data_synthesised)[1],size = (dim(data_synthesised)[1] * .75) )
 train_data = data_synthesised[sam,]
 test_data = data_synthesised[-sam,]
 
-train_x = train_data[,-19]
-train_y = train_data[,19]
-
-test_x = test_data[,-19]
-test_y = test_data[,19]
+train_x = train_data[,-which(names(train_data) %in% c("covid19"))]
+train_y = train_data[,"covid19"]
+test_x = test_data[,-which(names(train_data) %in% c("covid19"))]
+test_y = test_data[,"covid19"]
 
 train_data_numeric = as.data.frame(ifelse(train_data == "Yes", 1,0))
 train_x_numeric = as.data.frame(ifelse(train_x == "Yes", 1,0))
@@ -200,7 +201,7 @@ tree = c(50,75,100,150)
 n_bag = c(50,100)
 
 RF = data.frame(0,0,0,0,0)
-names(RF)<-c("n tree","n bag","Accuracy","Sesitivity","Specificity")
+names(RF)<-c("n tree","n bag","Accuracy","Sensitivity","Specificity")
 RF = RF[-1,]
 
 for (i in tree){
@@ -260,10 +261,9 @@ names(val)=c('k','accuracy')
 val = val[-1,]
 for (i in 3:15){
   pred = knn(train_x_numeric,test_x_numeric,train_y_numeric[,1],k = i )
-  val[nrow(val)+1,1]=accuracy(test_y_numeric[,],pred)
+  val[nrow(val)+1,]=c(i,accuracy(test_y_numeric[,],pred))
 }
-k = val[,1]
-plot((val[-1,1]),type ='l')
+plot(val[,1],val[,2],type = 'l')
 
 ```
 
@@ -273,7 +273,7 @@ library(caret)
 pred_svm = predict(svm_mod,test_x_numeric)
 pred_svm = ifelse(pred > 0.5,1,0)
 conf_svm = confusionMatrix(data = factor(pred),factor(test_y_numeric[,]))
-
+conf_svm
 
 
 ```

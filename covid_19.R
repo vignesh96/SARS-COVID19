@@ -1,6 +1,8 @@
 library(ggplot2)
 library(dplyr)
 library(plotrix)
+library(performanceEstimation)
+
 covid = read.csv("Covid Dataset.csv", stringsAsFactors = TRUE)
 
 View(covid)
@@ -11,8 +13,6 @@ col_names = c("breathe", "fever", "cough", "sore_throat", "running_nose", "asthm
 colnames(covid) = col_names
 
 summary(covid)
-
-ggplot(covid, aes(x=breathe, y=covid19, size = pop)) + geom_point(alpha=0.7)
 
 plot(covid19~breathe+fever, data=covid)
 
@@ -31,10 +31,13 @@ print(sum_yes)
 df_sum_yes = data.frame(sum_yes)
 df_sum_yes["groups"] = row.names(df_sum_yes)
 
-ggplot(data=df_sum_yes, aes(x=reorder(df_sum_yes$groups, df_sum_yes$sum_yes), y=df_sum_yes$sum_yes)) +
+ggplot(data=df_sum_yes, aes(x=reorder(groups, sum_yes), y=sum_yes)) +
   geom_bar(stat="identity", fill="steelblue") +
-  geom_text(aes(label=df_sum_yes$sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
+  geom_text(aes(label=sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
 
-
-
+set.seed(508)
+hw2sort_lr<-sample(1:nrow(covid),nrow(covid)*0.8)
+train_lr<-covid[hw2sort_lr,]
+test_lr<-covid[-hw2sort_lr,]
+balanced.data <- smote(covid19 ~., train_lr, perc.over = 4800, k = 5, perc.under = 1000)
 
