@@ -1,0 +1,279 @@
+---
+title: "SARS Covid-19 Prediction and Analysis"
+output: "Predictive Model and comparitive analysis"
+---
+
+
+```{r}
+# Load the data and View it.
+data<-read.csv("//Users//rahuldhanapal//Documents//R//Project//Covid Dataset.csv",stringsAsFactors = TRUE)
+# Summary of the data.
+summary(data)
+```
+
+```{r}
+col_names = c("breathe", "fever", "cough", "sore_throat", "running_nose", "asthma", 
+              "lung", "headache", "heart", "diabetes", "hyper_tension", "fatigue", 
+              "gastrointestinal", "abroad", "contact", "large_gethering", "public_exposed_places",
+              "family", "masks", "sanitization", "covid19")
+colnames(data) = col_names
+
+```
+
+```{r}
+# visualising how each factor affects the target property
+library(ggplot2)
+yesses = sapply(data,FUN = function(x){(length(x[x=="Yes"])/4383)*100})
+yesses = yesses[-21]
+sum_yes = round((yesses / sum(yesses)) * 100, 2)
+
+df_sum_yes = data.frame(sum_yes)
+df_sum_yes["groups"] = row.names(df_sum_yes)
+
+ggplot(data=df_sum_yes, aes(x=reorder(df_sum_yes$groups, df_sum_yes$sum_yes), y=df_sum_yes$sum_yes)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=df_sum_yes$sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
+```
+```{r}
+#Feature Engineering 
+
+#It is seeen from bove that the observations sanitization and  masks do not contribute in any manner and it is best to remove it as a best practice.
+
+data = data[,-c(19,20)]
+# After removal of the unwanted columns 
+
+yesses = sapply(data,FUN = function(x){(length(x[x=="Yes"])/4383)*100})
+yesses = yesses[-21]
+sum_yes = round((yesses / sum(yesses)) * 100, 2)
+
+df_sum_yes = data.frame(sum_yes)
+df_sum_yes["groups"] = row.names(df_sum_yes)
+
+ggplot(data=df_sum_yes, aes(x=reorder(df_sum_yes$groups, df_sum_yes$sum_yes), y=df_sum_yes$sum_yes)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=df_sum_yes$sum_yes), hjust=1.6, color="white", size=3.5)+ coord_flip()
+
+```
+
+```{r}
+# SMOTE for class IMBALANCE
+library(performanceEstimation)
+# data before oversampling
+plot(data$covid19)
+# Values before SMOTE
+summary(data$covid19)
+
+set.seed(123)
+data_synthesised = smote(covid19~.,data,perc.over = 1,perc.under =2)
+plot(data_synthesised$covid19) # the minor class is oversampled using smote and the major class is undersampled using the spread subsample technique.
+
+
+```
+
+
+```{r}
+# train and test split data.
+
+set.seed(1)
+sam = sample(dim(data_synthesised)[1],size = (dim(data_synthesised)[1] * .75) )
+
+train_data = data_synthesised[sam,]
+test_data = data_synthesised[-sam,]
+
+train_x = train_data[,-19]
+train_y = train_data[,19]
+
+test_x = test_data[,-19]
+test_y = test_data[,19]
+
+train_data_numeric = as.data.frame(ifelse(train_data == "Yes", 1,0))
+train_x_numeric = as.data.frame(ifelse(train_x == "Yes", 1,0))
+train_y_numeric =as.data.frame(ifelse(train_y == "Yes", 1,0))
+test_x_numeric = as.data.frame(ifelse(test_x == "Yes", 1,0))
+test_y_numeric = as.data.frame(ifelse(test_y == "Yes", 1,0))
+test_data_numeric = as.data.frame(ifelse(test_data == "Yes", 1,0))
+```
+
+```{r}
+# Model Building Approach
+
+library(e1071)
+library(kernlab)
+library(hydroGOF)
+library(caret)
+library(Metrics)
+library(glmnet)
+library(pcr)
+library(randomForest)
+library(pls)
+library(class)
+library(superml)
+library(rpart)
+library(Metrics)
+
+#------------------------accracy func----------------------------------------------------
+
+fit_for_prob= function(mod, x_tr,y_tr,x_tst,y_tst, model_name,typ = "class",data_tr,data_tst){
+  pred = predict(mod,x_tr,type =typ)
+  pred = ifelse(pred > 0.5,"1","0")
+  tr_acc = round(accuracy(y_tr,pred)*100,4)
+  t = with(data_tr,table(pred,covid19))
+  print(t)
+  sesitivity_train = round(sensitivity(t)*100,4)
+  specifity_train = round(specificity(t)*100,4)
+  
+  pred = predict(mod,x_tst,type = typ)
+  pred = ifelse(pred > 0.5,"1","0")
+  tst_acc = round(accuracy(y_tst,pred)*100,4)
+  t = with(data_tst,table(pred,covid19))
+  print(t)
+  sesitivity_test = round(sensitivity(t)*100,4)
+  specifity_test = round(specificity(t)*100,4)
+  
+  return(c(model_name,tr_acc,sesitivity_train,specifity_train,tst_acc,sesitivity_test,specifity_test))
+}
+
+#------------------------accuracy func----------------------------------------------------
+
+fit_for_factors = function(mod, x_tr,y_tr,x_tst,y_tst, model_name,data_tr,data_tst){
+  pred = predict(mod,x_tr)
+  tr_acc = round(accuracy(y_tr,pred)*100,4)
+  t = with(data_tr,table(pred,covid19))
+  print(t)
+  sesitivity_train = round(sensitivity(t)*100,4)
+  specifity_train = round(specificity(t)*100,4)
+
+  
+  pred = predict(mod,x_tst)
+  tst_acc = round(accuracy(y_tst,pred)*100,4)
+  t = with(data_tst,table(pred,covid19))
+  print(t)
+  sesitivity_test = round(sensitivity(t)*100,4)
+  specifity_test = round(specificity(t)*100,4)
+  
+  
+  
+  return(c(model_name,tr_acc,sesitivity_train,specifity_train,tst_acc,sesitivity_test,specifity_test))
+}
+
+#------------------------accuracy func----------------------------------------------------
+
+fit_for_factors_nb = function(mod, x_tr,y_tr,x_tst,y_tst, model_name,data_tr,data_tst){
+  pred = predict(mod,x_tr)$class
+  tr_acc = round(accuracy(y_tr,pred)*100,4)
+  t = with(data_tr,table(pred,covid19))
+  print(t)
+  sesitivity_train = round(sensitivity(t)*100,4)
+  specifity_train = round(specificity(t)*100,4)
+
+  
+  pred = predict(mod,x_tst)$class
+  tst_acc = round(accuracy(y_tst,pred)*100,4)
+  t = with(data_tst,table(pred,covid19))
+  print(t)
+  sesitivity_test = round(sensitivity(t)*100,4)
+  specifity_test = round(specificity(t)*100,4)
+  
+  
+  
+  return(c(model_name,tr_acc,sesitivity_train,specifity_train,tst_acc,sesitivity_test,specifity_test))
+}
+
+
+#-------------------random forests----------------------------------------------
+
+# a baseline random forests model
+rf_mod = randomForest(covid19~.,data = train_data,nbBag = 50)
+fit_for_factors(rf_mod,train_x,train_y,test_x,test_y,"RANDOM FORESTS",train_data,test_data)
+
+# tune for different m_try values
+res = tuneRF(train_x,train_y,mtryStart =c(1:15))
+mtry_opt <- res[,"mtry"][which.min(res[,"OOBError"])]
+# to find the best mtry value
+plot(res,type ='l',xlab="M TRY",ylab="OOB error")
+
+
+rf_mod = randomForest(covid19~.,data = train_data,mtry = mtry_opt,ntree = 100)
+fit_for_factors(rf_mod,train_x,train_y,test_x,test_y,"RANDOM FORESTS",train_data,test_data)
+
+tree = c(50,75,100,150)
+n_bag = c(50,100)
+
+RF = data.frame(0,0,0,0,0)
+names(RF)<-c("n tree","n bag","Accuracy","Sesitivity","Specificity")
+RF = RF[-1,]
+
+for (i in tree){
+  for (j in n_bag){
+      rf_mod = randomForest(covid19~.,data = train_data,mtry = mtry_opt,ntree = i,n_bag = j)
+      tmp = c(fit_for_factors(rf_mod,train_x,train_y,test_x,test_y,"RANDOM FORESTS",train_data,test_data)[5:7])
+      RF[nrow(RF)+1,1:2] = c(i,j)
+      RF[nrow(RF),3:5] = tmp
+  }
+}
+
+rf_mod = randomForest(covid19~.,data = train_data,mtry = mtry_opt,ntree = 50,n_bag=100)
+
+#-------------------logistic regression-----------------------------------------
+
+logistic <- train(covid19 ~., data=train_data_numeric, method='glm',
+                    tuneGrid=expand.grid(parameter=c(0.001, 0.01, 0.1, 1,10,100, 1000)))
+
+
+LOGISTIC= logistic$results
+
+logistic = logistic$finalModel
+fit_for_prob(logistic,train_x_numeric,train_y_numeric,test_x_numeric,test_y_numeric,"LOGISTIC REGRESSION",'response',train_data_numeric,test_data_numeric)
+
+#------------------------svm----------------------------------------------------
+
+svm_mod = svm(covid19~.,data = train_data_numeric,cost = 3)
+fit_for_prob(svm_mod,train_x_numeric,train_y_numeric,test_x_numeric,test_y_numeric,"svm",typ = "response",train_data_numeric,test_data_numeric)
+
+#-------------------------ANN---------------------------------------------------
+
+library(neuralnet)
+
+nn=neuralnet(covid19~.,data=train_data_numeric, hidden= 3,act.fct = "logistic",
+                linear.output = FALSE)
+Predict=compute(nn,train_x_numeric)
+prob <- Predict$net.result
+pred_nn <- ifelse(prob>0.5, 1, 0)
+nn_accuracy = accuracy(train_y_numeric,pred_nn)
+
+nn_accuracy
+
+#-------------------------NB----------------------------------------------------
+
+library(e1071)
+model = train(train_x,train_y,'nb',trControl=trainControl(method='cv',number=10))
+
+nb_mod = model$finalModel
+
+fit_for_factors_nb(nb_mod,train_x,train_y,test_x,test_y,"NAIVE BAYES",train_data,test_data)
+
+
+#--------------------------KNN---------------------------------------------------
+
+val=  data.frame(0,0)
+names(val)=c('k','accuracy')
+val = val[-1,]
+for (i in 3:15){
+  pred = knn(train_x_numeric,test_x_numeric,train_y_numeric[,1],k = i )
+  val[nrow(val)+1,1]=accuracy(test_y_numeric[,],pred)
+}
+k = val[,1]
+plot((val[-1,1]),type ='l')
+
+```
+
+```{r}
+library(caret)
+
+pred_svm = predict(svm_mod,test_x_numeric)
+pred_svm = ifelse(pred > 0.5,1,0)
+conf_svm = confusionMatrix(data = factor(pred),factor(test_y_numeric[,]))
+
+
+
+```
