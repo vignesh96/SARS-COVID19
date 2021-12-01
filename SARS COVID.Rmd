@@ -365,7 +365,7 @@ metrics = rbind(metrics,list(Model="KNN", Accuracy=conf_KNN$overall["Accuracy"],
 library(patchwork)
 library(dplyr)
 library(tidyr)
-
+write.csv(metrics, file="assets/metrics.csv")
 print(metrics)
 acc_plot<-ggplot(data=metrics, aes(x=Model, y=Accuracy)) +
   geom_bar(stat="identity", fill="steelblue") +
@@ -408,5 +408,14 @@ spec_plot
 kappa_plot
 mae_plot
 classify_plot
+
+```
+
+```{r}
+
+write.csv(RF, "assets/RF_metrics.csv")
+write.csv(LOGISTIC, "assets/LOGISTIC_metrics.csv")
+write.csv(NB, "assets/NB.csv")
+write.csv(val, "asset/KNN.csv")
 
 ```
