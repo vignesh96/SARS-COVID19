@@ -62,13 +62,21 @@ ggplot(data=sum_yes_df, aes(x=reorder(groups, sum_yes), y=sum_yes)) +
 # SMOTE for class IMBALANCE
 library(performanceEstimation)
 # data before oversampling
-with(data, plot(covid19))
-# Values before SMOTE
 with(data, summary(covid19))
+data_plot = ggplot(data = data, aes(x = covid19)) +
+    geom_bar(fill="steelblue") 
+data_plot
+# Values before SMOTE
+
 
 set.seed(123)
 data_synthesised = smote(covid19~.,data,perc.over = 1,perc.under =2)
-plot(data_synthesised$covid19) # the minor class is oversampled using smote and the major class is undersampled using the spread subsample technique.
+# the minor class is oversampled using smote and the major class is undersampled using the spread subsample technique.
+with(data_synthesised, summary(covid19))
+smote_data_plot = ggplot(data = data_synthesised, aes(x = covid19)) +
+    geom_bar(fill="steelblue") 
+smote_data_plot
+
 
 
 ```
@@ -242,13 +250,18 @@ prob <- Predict$net.result
 pred_nn <- ifelse(prob>0.5, 1, 0)
 nn_accuracy = accuracy(train_y_numeric,pred_nn)
 
+Predict=compute(nn,test_x_numeric)
+prob <- Predict$net.result
+pred_nn <- ifelse(prob>0.5, 1, 0)
+nn_accuracy = accuracy(test_y_numeric[,],pred_nn)
+
 nn_accuracy
 
 #-------------------------NB----------------------------------------------------
 
 library(e1071)
 model = train(train_x,train_y,'nb',trControl=trainControl(method='cv',number=10))
-
+NB = model$results
 nb_mod = model$finalModel
 
 fit_for_factors_nb(nb_mod,train_x,train_y,test_x,test_y,"NAIVE BAYES",train_data,test_data)
@@ -272,8 +285,128 @@ library(caret)
 
 pred_svm = predict(svm_mod,test_x_numeric)
 pred_svm = ifelse(pred > 0.5,1,0)
-conf_svm = confusionMatrix(data = factor(pred),factor(test_y_numeric[,]))
+conf_svm = confusionMatrix(data = factor(pred_svm),factor(test_y_numeric[,]))
 conf_svm
 
+
+```
+
+
+```{r}
+metrics = data.frame(Model=character(), Accuracy=double(), Precision=double(), Specificity=double(), Sensitivity=double(), Kappa=double(), MAE=double(), correct=integer(), wrong=integer())
+
+
+#SVM FINAL MODEL
+pred_svm = predict(svm_mod,test_x_numeric)
+pred_svm = ifelse(pred_svm > 0.5,1,0)
+conf_svm = confusionMatrix(data = factor(pred_svm),factor(test_y_numeric[,]))
+mae_svm = mae(test_y_numeric[,],pred_svm)
+correct_svm = sum(diag(conf_svm$table))
+metrics = rbind(metrics,list(Model="SVM", Accuracy=conf_svm$overall["Accuracy"], Kappa=conf_svm$overall["Kappa"], 
+                             Precision=conf_svm$byClass["Precision"], Specificity=conf_svm$byClass["Specificity"],
+                             Sensitivity=conf_svm$byClass["Sensitivity"], MAE = mae_svm, correct=correct_svm, wrong=sum(conf_svm$table) - correct_svm))
+
+#LOGISTIC FINAL MODEL
+pred_logistic = predict(logistic,test_x_numeric)
+pred_logistic = ifelse(pred_logistic > 0.5,1,0)
+conf_logistic = confusionMatrix(data = factor(pred_logistic),factor(test_y_numeric[,]))
+mae_logistic = mae(test_y_numeric[,],pred_logistic)
+correct_logistic = sum(diag(conf_logistic$table))
+metrics = rbind(metrics,list(Model="Logistic", Accuracy=conf_logistic$overall["Accuracy"], Kappa=conf_logistic$overall["Kappa"], Precision=conf_logistic$byClass["Precision"], Specificity=conf_logistic$byClass["Specificity"], Sensitivity=conf_logistic$byClass["Sensitivity"], MAE = mae_logistic, correct=correct_logistic, wrong=sum(conf_logistic$table) - correct_logistic))                          
+
+#RF FINAL MODEL
+pred_RF = predict(rf_mod,test_x)
+pred_RF = ifelse(pred_RF == 'Yes',1,0)
+conf_RF = confusionMatrix(data = factor(pred_RF),factor(test_y_numeric[,]))
+mae_RF = mae(test_y_numeric[,],pred_RF)
+correct_RF = sum(diag(conf_RF$table))
+metrics = rbind(metrics,list(Model="Random Forest", Accuracy=conf_RF$overall["Accuracy"], Kappa=conf_RF$overall["Kappa"],
+                             Precision=conf_RF$byClass["Precision"], Specificity=conf_RF$byClass["Specificity"], Sensitivity=conf_RF$byClass["Sensitivity"], MAE=mae_RF,
+                             correct=correct_RF, wrong=sum(conf_RF$table) - correct_RF))   
+
+#NB FINAL MODEL
+pred_NB = predict(nb_mod,test_x)$class
+pred_NB = ifelse(pred_NB == 'Yes',1,0)
+conf_NB = confusionMatrix(data = factor(pred_NB),factor(test_y_numeric[,]))
+mae_NB = mae(test_y_numeric[,],pred_NB)
+correct_NB = sum(diag(conf_NB$table))
+metrics = rbind(metrics,list(Model="Naive Bayes", Accuracy=conf_NB$overall["Accuracy"], Kappa=conf_NB$overall["Kappa"], 
+                             Precision=conf_NB$byClass["Precision"], Specificity=conf_NB$byClass["Specificity"],     Sensitivity=conf_NB$byClass["Sensitivity"], MAE=mae_NB,
+                             correct=correct_NB, wrong=sum(conf_NB$table) - correct_NB))
+
+
+# NN FINAL MODEL
+
+pred_NN=compute(nn,test_x_numeric)
+pred_NN = Predict$net.result
+pred_NN = ifelse(pred_NN > 0.5, 1, 0)
+conf_NN = confusionMatrix(data = factor(pred_NN),factor(test_y_numeric[,]))
+mae_NN = mae(test_y_numeric[,],pred_NN)
+correct_NN = sum(diag(conf_NN$table))
+metrics = rbind(metrics,list(Model="ANN", Accuracy=conf_NN$overall["Accuracy"], Kappa=conf_NN$overall["Kappa"],
+                             Precision=conf_NN$byClass["Precision"], Specificity=conf_NN$byClass["Specificity"], Sensitivity=conf_NN$byClass["Sensitivity"], MAE=mae_NN,
+                             correct=correct_NN, wrong=sum(conf_NN$table) - correct_NN))
+
+#KNN FINAL MODEL
+
+pred_KNN =  knn(train_x_numeric,test_x_numeric,train_y_numeric[,1],k = 3 )
+conf_KNN =  confusionMatrix(data = factor(pred_KNN),factor(test_y_numeric[,]))
+mae_KNN = mae(test_y_numeric[,],as.numeric(as.character(pred_KNN)))
+correct_KNN = sum(diag(conf_KNN$table))
+metrics = rbind(metrics,list(Model="KNN", Accuracy=conf_KNN$overall["Accuracy"], Kappa=conf_KNN$overall["Kappa"],
+                             Precision=conf_KNN$byClass["Precision"], Specificity=conf_KNN$byClass["Specificity"], Sensitivity=conf_KNN$byClass["Sensitivity"], MAE=mae_KNN,
+                             correct=correct_KNN, wrong=sum(conf_KNN$table) - correct_KNN))
+
+
+```
+
+
+```{r}
+library(patchwork)
+library(dplyr)
+library(tidyr)
+
+print(metrics)
+acc_plot<-ggplot(data=metrics, aes(x=Model, y=Accuracy)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=round(Accuracy, 4)), vjust=1.6, color="white", size=3.5)
+
+pre_plot<-ggplot(data=metrics, aes(x=Model, y=Precision)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=round(Precision,4)), vjust=1.6, color="white", size=3.5)
+
+sense_plot<-ggplot(data=metrics, aes(x=Model, y=Sensitivity)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=round(Sensitivity, 4)), vjust=1.6, color="white", size=3.5)
+
+spec_plot<-ggplot(data=metrics, aes(x=Model, y=Specificity)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=round(Specificity,4)), vjust=1.6, color="white", size=3.5)
+
+kappa_plot<-ggplot(data=metrics, aes(x=Model, y=Kappa)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=round(Kappa, 4)), vjust=1.6, color="white", size=3.5)
+
+mae_plot<-ggplot(data=metrics, aes(x=Model, y=MAE)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  geom_text(aes(label=round(MAE, 4)), vjust=1.6, color="white", size=3.5)
+
+classify = data.frame(metrics[,c("Model", "correct", "wrong")])
+classify.long = classify %>% gather("Statistics", "Value", -Model)
+classify_plot = ggplot(classify.long, aes(x = Model, y = Value, fill = Statistics)) +
+  geom_col(position = "dodge") +
+  xlab('Model') +
+  ylab('Classified Instances') +
+  scale_fill_manual('Statistics', values=c('steelblue', 'coral2'))
+
+
+
+acc_plot
+pre_plot
+sense_plot
+spec_plot
+kappa_plot
+mae_plot
+classify_plot
 
 ```
